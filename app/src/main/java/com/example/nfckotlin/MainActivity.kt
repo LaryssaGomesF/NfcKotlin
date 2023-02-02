@@ -1,22 +1,22 @@
 package com.example.nfckotlin
 
 
-
 import android.app.Activity
+import android.app.PendingIntent
 import android.content.Intent
-import android.nfc.NdefMessage
-import android.nfc.NdefRecord.createMime
 import android.nfc.NfcAdapter
-import android.nfc.NfcEvent
+import android.nfc.Tag
+import android.nfc.tech.*
 import android.os.Bundle
 import android.widget.TextView
 import android.widget.Toast
 
 
-class MainActivity : Activity(), NfcAdapter.CreateNdefMessageCallback {
+class MainActivity : Activity() {
 
     private var nfcAdapter: NfcAdapter? = null
     private lateinit var textView: TextView
+    private var pendingIntent: PendingIntent? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,51 +30,63 @@ class MainActivity : Activity(), NfcAdapter.CreateNdefMessageCallback {
             return
         }
         // Register callback
-        nfcAdapter?.setNdefPushMessageCallback(this, this)
+        pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            0
+        )
+
+        //  nfcAdapter?.setNdefPushMessageCallback(this, this)
     }
 
-    override fun createNdefMessage(event: NfcEvent): NdefMessage {
-        val text = "Beam me up, Android!\n\n" +
-                "Beam Time: " + System.currentTimeMillis()
-        return NdefMessage(
-            arrayOf(
-                createMime("application/vnd.com.example.android.beam", text.toByteArray())
-            )
-            /**
-             * The Android Application Record (AAR) is commented out. When a device
-             * receives a push with an AAR in it, the application specified in the AAR
-             * is guaranteed to run. The AAR overrides the tag dispatch system.
-             * You can add it back in to guarantee that this
-             * activity starts when receiving a beamed message. For now, this code
-             * uses the tag dispatch system.
-             *///,NdefRecord.createApplicationRecord("com.example.android.beam")
-        )
-    }
 
     override fun onResume() {
         super.onResume()
-        // Check to see that the Activity started due to an Android Beam
-        if (NfcAdapter.ACTION_NDEF_DISCOVERED == intent.action) {
-            processIntent(intent)
+        assert(nfcAdapter != null)
+
+        nfcAdapter?.enableForegroundDispatch(this, pendingIntent, null, null)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (nfcAdapter != null) {
+            nfcAdapter?.disableForegroundDispatch(this);
         }
     }
 
-    override fun onNewIntent(intent: Intent) {
-        // onResume gets called after this to handle the intent
-        setIntent(intent)
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        intent?.let { getTagInfo(it) }
     }
 
-    /**
-     * Parses the NDEF Message from the intent and prints to the TextView
-     */
-    private fun processIntent(intent: Intent) {
-        textView = findViewById(R.id.textView)
-        // only one message sent during the beam
-        intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)?.also { rawMsgs ->
-            (rawMsgs[0] as NdefMessage).apply {
-                // record 0 contains the MIME type, record 1 is the AAR, if present
-                textView.text = String(records[0].payload)
+    private fun getTagInfo(intent: Intent) {
+        val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
+        val techList = tag!!.techList
+        for (i in techList.indices) {
+            if (techList[i] == MifareClassic::class.java.name) {
+                val mifareClassicTag = MifareClassic.get(tag)
+                when (mifareClassicTag.type) {
+                    MifareClassic.TYPE_CLASSIC -> {}
+                    MifareClassic.TYPE_PLUS -> {}
+                    MifareClassic.TYPE_PRO -> {}
+                }
+            } else if (techList[i] == MifareUltralight::class.java.name) {
+                //For Mifare Ultralight
+                val mifareUlTag = MifareUltralight.get(tag)
+                when (mifareUlTag.type) {
+                    MifareUltralight.TYPE_ULTRALIGHT -> {}
+                    MifareUltralight.TYPE_ULTRALIGHT_C -> {}
+                }
+            } else if (techList[i] == IsoDep::class.java.name) {
+                // info[1] = "IsoDep";
+                val isoDepTag = IsoDep.get(tag)
+            } else if (techList[i] == Ndef::class.java.name) {
+                Ndef.get(tag)
+            } else if (techList[i] == NdefFormatable::class.java.name) {
+                val ndefFormatableTag = NdefFormatable.get(tag)
             }
         }
     }
 }
+

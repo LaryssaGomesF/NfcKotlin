@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">NfcKotlin</string>
+    <string name="servicedesc">NfcKotlin</string>
 </resources>
